@@ -64,7 +64,11 @@
 <body>
 <main>
   <h1>限量活动报名</h1>
-  <p class="sub">演示页真实调用后端 API。同一次报名意图复用原 <code>requestId</code>；新意图生成新键。</p>
+  <p class="sub">
+    场景：用户点「立即报名」时，手机 App 会生成本地<strong>客户端报名单号</strong>（即 requestId）。
+    网络超时反复提交 → 复用同一单号（幂等，不重复扣名额）；
+    退出后再点一次「立即报名」→ 换新单号，但同一用户对同一活动仍只能成功一次。
+  </p>
 
   <section class="panel">
     <div class="row">
@@ -74,7 +78,7 @@
       </div>
       <div>
         <label>&nbsp;</label>
-        <button type="button" id="btnRefresh">刷新活动</button>
+        <button type="button" id="btnRefresh">刷新</button>
       </div>
     </div>
   </section>
@@ -97,7 +101,7 @@
         <select id="activityId"></select>
       </div>
       <div>
-        <label for="requestId">requestId（本次意图）</label>
+        <label for="requestId">客户端报名单号（requestId）</label>
         <input id="requestId" type="text" maxlength="64" />
       </div>
       <div>
@@ -106,7 +110,7 @@
       </div>
       <div>
         <label>&nbsp;</label>
-        <button type="button" id="btnNewIntent" style="background:#334155;border-color:#334155;">新报名意图</button>
+        <button type="button" id="btnNewIntent" style="background:#334155;border-color:#334155;">重新点立即报名</button>
       </div>
     </div>
     <div id="regStatus" class="status"></div>
@@ -119,7 +123,7 @@
     </div>
     <table>
       <thead>
-        <tr><th>报名 ID</th><th>活动</th><th>requestId</th><th>状态</th></tr>
+        <tr><th>报名 ID</th><th>活动</th><th>客户端报名单号</th><th>状态</th></tr>
       </thead>
       <tbody id="mineBody"></tbody>
     </table>
@@ -199,9 +203,9 @@
         body: JSON.stringify({ activityId, requestId })
       });
       if (res.status === 201) {
-        setStatus($("regStatus"), `报名成功（新建）ID=${body.data.id}`, "ok");
+        setStatus($("regStatus"), `报名成功（新建）报名记录=${body.data.id}，单号已绑定当前用户`, "ok");
       } else if (res.status === 200) {
-        setStatus($("regStatus"), `成功重放（未扣减）ID=${body.data.id}`, "ok");
+        setStatus($("regStatus"), `同一单号重试成功（幂等重放，未再扣名额）记录=${body.data.id}`, "ok");
       } else {
         setStatus($("regStatus"), `业务错误 ${res.status} ${body.code || ""}: ${body.message || ""}`, "err");
       }
@@ -238,17 +242,36 @@
     }
   }
 
-  $("btnRefresh").onclick = loadActivities;
+  async function refreshAll() {
+    await loadActivities();
+    await loadMine();
+  }
+
+  function onUserChanged() {
+    // 换用户后换新报名单号，并立刻按新用户拉「我的报名」
+    currentRequestId = newRequestId();
+    $("requestId").value = currentRequestId;
+    setStatus($("regStatus"), "已切换用户，已生成该用户的新客户端报名单号", "busy");
+    loadMine();
+  }
+
+  $("btnRefresh").onclick = refreshAll;
   $("btnRegister").onclick = register;
   $("btnMine").onclick = loadMine;
   $("btnNewIntent").onclick = () => {
     currentRequestId = newRequestId();
     $("requestId").value = currentRequestId;
-    setStatus($("regStatus"), "已生成新报名意图 requestId=" + currentRequestId, "busy");
+    setStatus($("regStatus"),
+      "已模拟：用户再次点击「立即报名」，App 换了新单号。若该活动已报过名，提交会返回 ALREADY_REGISTERED",
+      "busy");
   };
+  $("userId").addEventListener("change", onUserChanged);
+  $("userId").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") onUserChanged();
+  });
 
   ensureRequestId();
-  loadActivities();
+  refreshAll();
 </script>
 </body>
 </html>
