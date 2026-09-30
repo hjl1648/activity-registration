@@ -63,6 +63,10 @@ python tools/reconcile.py --host 127.0.0.1 --port 3307 --user root --password ro
 | MQ / Mongo / ES | 未实现（未选择） |
 | 生产级登录认证 | 明确不做，仅 X-User-Id 演示标记 |
 
+## 8. 对账异常样例（深化 D）
+
+故意将活动 1001 的 `remaining_quota` +1 后运行对账：`consistent: false`，退出码 1，并指出 `expectedRemaining`。恢复后再次对账退出码 0。证明能定位不一致且默认不改业务数据。
+
 ## 已知限制
 
 - 未在本报告中附多 JVM 实例共享库的压测截图；单实例并发已覆盖名额与同键场景。  

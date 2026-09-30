@@ -11,3 +11,5 @@ tools/redis.zip
 runtime/
 __pycache__/
 *.pyc
+
+tools/mysql_*.txt
