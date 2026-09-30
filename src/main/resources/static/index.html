@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>限量活动报名演示</title>
+  <style>
+    :root {
+      --bg: #f3f0e8;
+      --ink: #1c2430;
+      --accent: #0f6a5a;
+      --line: #cfc8b8;
+      --warn: #9a3412;
+      --ok: #166534;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, #dff3ee 0, transparent 40%),
+        linear-gradient(180deg, #f7f4ec 0%, #ebe4d6 100%);
+      min-height: 100vh;
+    }
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 28px 18px 48px;
+    }
+    h1 { margin: 0 0 6px; font-size: 1.7rem; }
+    .sub { color: #546173; margin-bottom: 22px; }
+    .panel {
+      background: rgba(255,255,255,.72);
+      border: 1px solid var(--line);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    label { display: block; font-size: .9rem; margin-bottom: 4px; }
+    input, select, button {
+      font: inherit;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      cursor: pointer;
+    }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+    .row > div { flex: 1; min-width: 140px; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; }
+    .status { margin-top: 10px; min-height: 1.4em; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--warn); }
+    .status.busy { color: #334155; }
+    code { background: #efe9db; padding: 1px 5px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>限量活动报名</h1>
+  <p class="sub">演示页真实调用后端 API。同一次报名意图复用原 <code>requestId</code>；新意图生成新键。</p>
+
+  <section class="panel">
+    <div class="row">
+      <div>
+        <label for="userId">演示用户 ID（X-User-Id）</label>
+        <input id="userId" type="number" min="1" value="1101" />
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button type="button" id="btnRefresh">刷新活动</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 style="margin-top:0;font-size:1.1rem;">活动列表</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>标题</th><th>状态</th><th>剩余/总名额</th></tr>
+      </thead>
+      <tbody id="activityBody"></tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2 style="margin-top:0;font-size:1.1rem;">报名</h2>
+    <div class="row">
+      <div>
+        <label for="activityId">活动 ID</label>
+        <select id="activityId"></select>
+      </div>
+      <div>
+        <label for="requestId">requestId（本次意图）</label>
+        <input id="requestId" type="text" maxlength="64" />
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button type="button" id="btnRegister">提交报名</button>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button type="button" id="btnNewIntent" style="background:#334155;border-color:#334155;">新报名意图</button>
+      </div>
+    </div>
+    <div id="regStatus" class="status"></div>
+  </section>
+
+  <section class="panel">
+    <div class="row">
+      <div><h2 style="margin:0;font-size:1.1rem;">我的报名</h2></div>
+      <div style="flex:0"><button type="button" id="btnMine">查询</button></div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>报名 ID</th><th>活动</th><th>requestId</th><th>状态</th></tr>
+      </thead>
+      <tbody id="mineBody"></tbody>
+    </table>
+    <div id="mineStatus" class="status"></div>
+  </section>
+</main>
+<script>
+  const API = "";
+  let currentRequestId = null;
+
+  function $(id) { return document.getElementById(id); }
+
+  function newRequestId() {
+    const rand = Math.random().toString(36).slice(2, 10);
+    return "signup_" + Date.now().toString(36) + "_" + rand;
+  }
+
+  function ensureRequestId() {
+    if (!currentRequestId) {
+      currentRequestId = newRequestId();
+      $("requestId").value = currentRequestId;
+    }
+    return currentRequestId;
+  }
+
+  function setStatus(el, text, cls) {
+    el.className = "status " + (cls || "");
+    el.textContent = text || "";
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(API + path, options);
+    let body = null;
+    const text = await res.text();
+    try { body = text ? JSON.parse(text) : null; } catch (_) { body = { raw: text }; }
+    return { res, body };
+  }
+
+  async function loadActivities() {
+    const { res, body } = await api("/api/activities?page=1&size=100");
+    if (!res.ok) {
+      alert((body && body.message) || "加载活动失败");
+      return;
+    }
+    const items = body.data.items || [];
+    const tbody = $("activityBody");
+    const select = $("activityId");
+    tbody.innerHTML = "";
+    select.innerHTML = "";
+    items.forEach(a => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${a.id}</td><td>${a.title}</td><td>${a.status}</td><td>${a.remainingQuota}/${a.totalQuota}</td>`;
+      tbody.appendChild(tr);
+      const opt = document.createElement("option");
+      opt.value = a.id;
+      opt.textContent = `${a.id} - ${a.title}`;
+      select.appendChild(opt);
+    });
+  }
+
+  async function register() {
+    const userId = $("userId").value.trim();
+    const activityId = Number($("activityId").value);
+    const requestId = ($("requestId").value.trim() || ensureRequestId());
+    currentRequestId = requestId;
+    $("requestId").value = requestId;
+    const btn = $("btnRegister");
+    btn.disabled = true;
+    setStatus($("regStatus"), "提交中…", "busy");
+    try {
+      const { res, body } = await api("/api/registrations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-Id": userId
+        },
+        body: JSON.stringify({ activityId, requestId })
+      });
+      if (res.status === 201) {
+        setStatus($("regStatus"), `报名成功（新建）ID=${body.data.id}`, "ok");
+      } else if (res.status === 200) {
+        setStatus($("regStatus"), `成功重放（未扣减）ID=${body.data.id}`, "ok");
+      } else {
+        setStatus($("regStatus"), `业务错误 ${res.status} ${body.code || ""}: ${body.message || ""}`, "err");
+      }
+      await loadActivities();
+      await loadMine();
+    } catch (e) {
+      setStatus($("regStatus"), "网络失败，可保留原 requestId 重试：" + e.message, "err");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function loadMine() {
+    const userId = $("userId").value.trim();
+    setStatus($("mineStatus"), "查询中…", "busy");
+    try {
+      const { res, body } = await api("/api/registrations?page=1&size=100", {
+        headers: { "X-User-Id": userId }
+      });
+      const tbody = $("mineBody");
+      tbody.innerHTML = "";
+      if (!res.ok) {
+        setStatus($("mineStatus"), `${body.code || res.status}: ${body.message || "查询失败"}`, "err");
+        return;
+      }
+      (body.data.items || []).forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${r.id}</td><td>${r.activityId}</td><td>${r.requestId}</td><td>${r.status}</td>`;
+        tbody.appendChild(tr);
+      });
+      setStatus($("mineStatus"), `共 ${body.data.total} 条`, "ok");
+    } catch (e) {
+      setStatus($("mineStatus"), "网络错误: " + e.message, "err");
+    }
+  }
+
+  $("btnRefresh").onclick = loadActivities;
+  $("btnRegister").onclick = register;
+  $("btnMine").onclick = loadMine;
+  $("btnNewIntent").onclick = () => {
+    currentRequestId = newRequestId();
+    $("requestId").value = currentRequestId;
+    setStatus($("regStatus"), "已生成新报名意图 requestId=" + currentRequestId, "busy");
+  };
+
+  ensureRequestId();
+  loadActivities();
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: activity-registration
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3307/activity_reg?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      timeout: 500ms
+      connect-timeout: 500ms
+  sql:
+    init:
+      mode: never
+
+app:
+  cache:
+    activity-ttl-seconds: 60
+
+logging:
+  level:
+    com.exam.activity: INFO
+    org.springframework.data.redis: WARN
